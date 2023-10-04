@@ -84,7 +84,8 @@ messages_cities = (
         ),
     )
     .where("distance_rank == 1")
-    .drop("distance_rank", "distance", "lat", "lon", "id", "lat_c", "lon_c")
+#    .drop("distance_rank", "distance", "lat", "lon", "id", "lat_c", "lon_c")
+    .select ("user_id", "messages_id", "date", "datetime", "city", "timezone")
 )
 
 
@@ -153,11 +154,11 @@ def main():
         )
         .withColumn(
             "city_lag",
-            F.lead("city", 1, "empty").over(
+            F.lead("act_city", 1, "empty").over(
                 Window().partitionBy("user_id").orderBy(F.col("date").desc())
             ),
         )
-        .filter(F.col("city") != F.col("city_lag"))
+        .filter(F.col("act_city") != F.col("city_lag"))
     )
 
     # рассчитываем адрес города, из которого были отправлены 27 дней подряд сообщения от пользователя
@@ -184,13 +185,10 @@ def main():
         .drop("date_diff", "date_lag", "max_date", "city_lag", "rank")
     )
 
-    # рассчитываем кол-во смен города по каждому пользователю
-    travel_count = (
-        temp_df.groupBy("user_id").count().withColumnRenamed("count", "travel_count")
-    )
-
-    # рассчитываем список городов, которые посетил пользователь
+    # рассчитываем кол-во смен города по каждому пользователю и 
+    # список городов, которые посетил пользователь
     travel_list = temp_df.groupBy("user_id").agg(
+        F.count("*").alias("travel_count"),
         F.collect_list("city").alias("travel_array")
     )
 
@@ -203,7 +201,6 @@ def main():
     final = (
         active_messages_cities.select("user_id", "act_city")
         .join(home_city, "user_id", "left")
-        .join(travel_count, "user_id", "left")
         .join(travel_list, "user_id", "left")
         .join(time_local, "user_id", "left")
         .select(
