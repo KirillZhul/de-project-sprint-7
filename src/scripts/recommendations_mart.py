@@ -68,11 +68,13 @@ def input_paths(date, depth, events_path):
 
 def main():
     
-    spark = (
-        SparkSession.builder.master("local")
-        .appName("Learning DataFrames")
-        .getOrCreate()
-    )
+    spark = SparkSession.builder \
+                    .master("yarn") \
+                    .config("spark.driver.cores", "2") \
+                    .config("spark.driver.memory", "16g") \
+                    .config("spark.dynamicAllocation.enabled", "true") \
+                    .config("spark.dynamicAllocation.executorIdleTimeout", "60s") \
+                    .getOrCreate()
     
     
     cities = (
