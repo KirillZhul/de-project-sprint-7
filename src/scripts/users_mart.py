@@ -38,24 +38,16 @@ spark = SparkSession.builder \
                     .getOrCreate()
 
 
-def get_distance(lon_a, lat_a, lon_b, lat_b):
-    RADIUS_EARTH = 6371
+def get_distance(lat_1, lat_2, long_1, long_2):
+    lat_1=(math.pi/180)*lat_1
+    lat_2=(math.pi/180)*lat_2
+    long_1=(math.pi/180)*long_1
+    long_2=(math.pi/180)*long_2
+ 
+    return  2*6371*math.asin(math.sqrt(math.pow(math.sin((lat_2 - lat_1)/2), 2)+
+    math.cos(lat_1)*math.cos(lat_2)*math.pow(math.sin((long_2 - long_1)/2),2)))
 
-    lon_a, lat_a, lon_b, lat_b = map(
-        radians, [lon_a, lat_a, lon_b, lat_b]
-    )  # Перевод в радианы
-    dist_longit = lon_b - lon_a
-    dist_latit = lat_b - lat_a
-
-    area = (
-        sin(dist_latit / 2) ** 2 + cos(lat_a) * cos(lat_b) * sin(dist_longit / 2) ** 2
-    )
-    central_angle = 2 * asin(sqrt(area))
-    distance = central_angle * RADIUS_EARTH
-
-    return abs(round(distance, 2))
-
-udf_func = F.udf(get_distance)
+udf_func=F.udf(get_distance)
 
 
 def input_paths(date, depth, events_path):
@@ -95,36 +87,32 @@ messages_cities = (
     .drop("distance_rank", "distance", "lat", "lon", "id", "lat_c", "lon_c")
 )
 
-    
-def get_act_city(events_messages, csv_path, spark):
 
-    messages_cities = (
-        events_messages.withColumn(
-            "datetime_rank",
-            F.row_number().over(
-                Window().partitionBy(["user_id"]).orderBy(F.desc("datetime"))
-            ),
-        )
-        .where("datetime_rank == 1")
-        .orderBy("user_id")
-        .crossJoin(cities)
-        .withColumn(
-            "distance",
-            udf_func(F.col("lat"), F.col("lat_c"), F.col("lon"), F.col("lon_c")).cast(
-                "float"
-            ),
-        )
-        .withColumn(
-            "distance_rank",
-            F.row_number().over(
-                Window().partitionBy(["user_id"]).orderBy(F.asc("distance"))
-            ),
-        )
-        .where("distance_rank == 1")
-        .select("user_id", F.col("city").alias("act_city"), "date", "timezone")
+active_messages_cities = (
+    events_messages.withColumn(
+        "datetime_rank",
+        F.row_number().over(
+            Window().partitionBy(["user_id"]).orderBy(F.desc("datetime"))
+        ),
     )
-
-    return messages_cities    
+    .where("datetime_rank == 1")
+    .orderBy("user_id")
+    .crossJoin(cities)
+    .withColumn(
+        "distance",
+        udf_func(F.col("lat"), F.col("lat_c"), F.col("lon"), F.col("lon_c")).cast(
+            "float"
+        ),
+    )
+    .withColumn(
+        "distance_rank",
+        F.row_number().over(
+            Window().partitionBy(["user_id"]).orderBy(F.asc("distance"))
+        ),
+    )
+    .where("distance_rank == 1")
+    .select("user_id", F.col("city").alias("act_city"), "date", "timezone")
+) 
 
 def main():
 
@@ -158,15 +146,9 @@ def main():
         )
     )
 
-    # вычисляем датасет со всеми сообщениями за заданный период
-    general_tb = get_general_tab(events_messages, cities_path, spark)
-
-    # вычисляем датасет с городом, из которого было отправлено последнее сообщение
-    act_cities_df = get_act_city(events_messages, cities_path, spark)
-
     # рассчитываем таблицу с изменениями города отправки сообщения
     temp_df = (
-        general_tb.withColumn(
+        messages_cities.withColumn(
             "max_date", F.max("date").over(Window().partitionBy("user_id"))
         )
         .withColumn(
@@ -213,13 +195,13 @@ def main():
     )
 
     # рассчитываем локальное время
-    time_local = act_cities_df.withColumn(
+    time_local = active_messages_cities.withColumn(
         "localtime", F.from_utc_timestamp(F.col("date"), F.col("timezone"))
     ).drop("timezone", "city", "date", "datetime", "act_city")
 
     # объединяем все данные в одну витрину
     final = (
-        act_cities_df.select("user_id", "act_city")
+        active_messages_cities.select("user_id", "act_city")
         .join(home_city, "user_id", "left")
         .join(travel_count, "user_id", "left")
         .join(travel_list, "user_id", "left")
