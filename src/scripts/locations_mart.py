@@ -327,6 +327,9 @@ def main():
         .join(count_subscriptions, ["zone_id", "week", "month"], how="full")
     )
 
+    # Заполняем пропуски значением по умолчанию
+    geo_analitics_mart = geo_analitics_mart.fillna(0)
+    
     geo_analitics_mart.write.mode("overwrite").parquet(f"{target_path}/mart/geo")
 
 if __name__ == "__main__":
