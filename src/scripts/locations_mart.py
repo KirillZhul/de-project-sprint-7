@@ -52,9 +52,13 @@ cols = [
     "month_user",
 ]
 
-spark = (
-    SparkSession.builder.master("local").appName("Learning DataFrames").getOrCreate()
-)
+spark = SparkSession.builder \
+                    .master("yarn") \
+                    .config("spark.driver.cores", "2") \
+                    .config("spark.driver.memory", "16g") \
+                    .config("spark.dynamicAllocation.enabled", "true") \
+                    .config("spark.dynamicAllocation.executorIdleTimeout", "60s") \
+                    .getOrCreate()
 
 # функция для расчёта дистанции по координатам
 def get_distance(lat_1, lat_2, long_1, long_2):
