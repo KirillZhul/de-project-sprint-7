@@ -29,11 +29,13 @@ target_path = sys.argv[5]
 #cities_path = f"hdfs://rc1a-dataproc-m-dg5lgqqm7jju58f9.mdb.yandexcloud.net:8020/user/kirillzhul/geo_2.csv"
 #target_path = f"hdfs://rc1a-dataproc-m-dg5lgqqm7jju58f9.mdb.yandexcloud.net:8020/user/kirillzhul/data/analytics/"
 
-spark = (
-    SparkSession.builder.master("local")
-    .appName("Learning DataFrames")
-    .getOrCreate()
-)
+spark = SparkSession.builder \
+                    .master("yarn") \
+                    .config("spark.driver.cores", "2") \
+                    .config("spark.driver.memory", "16g") \
+                    .config("spark.dynamicAllocation.enabled", "true") \
+                    .config("spark.dynamicAllocation.executorIdleTimeout", "60s") \
+                    .getOrCreate()
 
 def get_distance(lat_1, lat_2, long_1, long_2):
     lat_1 = (math.pi / 180) * lat_1
