@@ -37,25 +37,23 @@ spark = SparkSession.builder \
                     .config("spark.dynamicAllocation.executorIdleTimeout", "60s") \
                     .getOrCreate()
 
-def get_distance(lat_1, lat_2, long_1, long_2):
-    lat_1 = (math.pi / 180) * lat_1
-    lat_2 = (math.pi / 180) * lat_2
-    long_1 = (math.pi / 180) * long_1
-    long_2 = (math.pi / 180) * long_2
 
-    return (
-        2
-        * 6371
-        * math.asin(
-            math.sqrt(
-                math.pow(math.sin((lat_2 - lat_1) / 2), 2)
-                + math.cos(lat_1)
-                * math.cos(lat_2)
-                * math.pow(math.sin((long_2 - long_1) / 2), 2)
-            )
-        )
+def get_distance(lon_a, lat_a, lon_b, lat_b):
+    RADIUS_EARTH = 6371
+
+    lon_a, lat_a, lon_b, lat_b = map(
+        radians, [lon_a, lat_a, lon_b, lat_b]
+    )  # Перевод в радианы
+    dist_longit = lon_b - lon_a
+    dist_latit = lat_b - lat_a
+
+    area = (
+        sin(dist_latit / 2) ** 2 + cos(lat_a) * cos(lat_b) * sin(dist_longit / 2) ** 2
     )
+    central_angle = 2 * asin(sqrt(area))
+    distance = central_angle * RADIUS_EARTH
 
+    return abs(round(distance, 2))
 
 udf_func = F.udf(get_distance)
 
