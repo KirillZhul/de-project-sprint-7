@@ -67,16 +67,16 @@ def input_paths(date, depth, events_path):
 
 
 def main():
-    
-    spark = SparkSession.builder \
-                    .master("yarn") \
-                    .config("spark.driver.cores", "2") \
-                    .config("spark.driver.memory", "16g") \
-                    .config("spark.dynamicAllocation.enabled", "true") \
-                    .config("spark.dynamicAllocation.executorIdleTimeout", "60s") \
-                    .getOrCreate()
-    
-    
+
+    spark = (
+        SparkSession.builder.master("yarn")
+        .config("spark.driver.cores", "2")
+        .config("spark.driver.memory", "16g")
+        .config("spark.dynamicAllocation.enabled", "true")
+        .config("spark.dynamicAllocation.executorIdleTimeout", "60s")
+        .getOrCreate()
+    )
+
     cities = (
         spark.read.csv(cities_path, sep=";", header=True)
         .withColumn("lat", regexp_replace("lat", ",", ".").cast(DoubleType()))
@@ -85,12 +85,11 @@ def main():
         .withColumnRenamed("lon", "lon_c")
         .select("id", "city", "lat_c", "lon_c", "timezone")
     )
-    
-    
+
     paths = input_paths(date, depth, events_path)
 
     events = spark.read.option("basePath", events_path).parquet(*paths)
-    
+
     # расчёт дистанций между пользователями и городами
     def get_subs_city(common_subs_distance, cities_path, spark):
         messages_cities = (
@@ -139,8 +138,37 @@ def main():
             .filter("lat_2 is not null and lon_2 is not null")
         )
 
+        # пересчитываем по последним координатам пользователей
+        subs_user_left_last = (
+            subs_user_left.withColumn(
+                "row_number",
+                F.row_number().over(
+                    Window.partitionBy("user_id").orderBy(F.desc("date"))
+                ),
+            )
+            .filter(F.col("row_number") == 1)
+            .select("user_id", "lat_1", "lon_1")
+            .withColumnRenamed("lat_1", "last_lat_1")
+            .withColumnRenamed("lon_1", "last_lon_1")
+        )
+
+        subs_user_right_last = (
+            subs_user_right.withColumn(
+                "row_number",
+                F.row_number().over(
+                    Window.partitionBy("user_id").orderBy(F.desc("date"))
+                ),
+            )
+            .filter(F.col("row_number") == 1)
+            .select("user_id", "lat_2", "lon_2")
+            .withColumnRenamed("lat_2", "last_lat_2")
+            .withColumnRenamed("lon_2", "last_lon_2")
+        )
+
         common_subs = (
-            subs_user_left.join(subs_user_right, "subscription_channel", "inner")
+            subs_user_left_last.join(
+                subs_user_right_last, "subscription_channel", "inner"
+            )
             .where(F.col("user_left") != F.col("user_right"))
             .distinct()
         )
@@ -172,12 +200,12 @@ def main():
     )
 
     user_right_contacts = events.where(F.col("event_type") == "message").select(
-         col("event.message_to").alias("user_left"),
-         col("event.message_from").alias("user_right"),
+        col("event.message_to").alias("user_left"),
+        col("event.message_from").alias("user_right"),
     )
-        
+
     real_contacts = user_left_contacts.union(user_right_contacts).distinct()
-                
+
     # определяем пользователей в пределах одного города, не имеющих контактов друг с другом
     no_contacts_users = common_subs_distance_zone1.join(
         real_contacts, ["user_left", "user_right"], "left_anti"
@@ -194,7 +222,7 @@ def main():
         .select("user_left", "user_right", "processed_dttm", "zone_id", "local_time")
     )
 
-   # записывем в формате parquet..
+    # записывем в формате parquet..
     recommendations.write.mode("overwrite").parquet(
         f"{target_path}/mart/recommendations/"
     )
