@@ -75,7 +75,7 @@
 
 #### Витрина рекомендации пользователям
 
-Расположение витрины: /user/qwertyqwer/data/prod/friends_recommendations
+Расположение витрины: /user/kirillzhul/data/analytics/mart/recommendations/
 
 Структура витрины:
 
