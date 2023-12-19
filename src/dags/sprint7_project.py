@@ -1,9 +1,7 @@
 from datetime import datetime
 from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
-from airflow.operators.bash import BashOperator
 from airflow.decorators import dag, task
-from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.operators.dummy import DummyOperator
 import os
 
@@ -42,7 +40,7 @@ users_mart = SparkSubmitOperator(
     ],
     conf={
         "spark.driver.maxResultSize": "20g",
-        "spark.sql.broadcastTimeout": 1200,
+        "spark.sql.broadcastTimeout": 300,
     },
     executor_cores=2,
     executor_memory="4g",
@@ -62,7 +60,7 @@ locations_mart = SparkSubmitOperator(
     ],
     conf={
         "spark.driver.maxResultSize": "20g",
-        "spark.sql.broadcastTimeout": 1200,
+        "spark.sql.broadcastTimeout": 300,
     },
     executor_cores=2,
     executor_memory="4g",
@@ -83,7 +81,7 @@ recommendations_mart = SparkSubmitOperator(
     ],
     conf={
         "spark.driver.maxResultSize": "20g",
-        "spark.sql.broadcastTimeout": 1200,
+        "spark.sql.broadcastTimeout": 300,
     },
     executor_cores=2,
     executor_memory="4g",
